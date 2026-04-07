@@ -1,0 +1,21 @@
+# Adytum Backend API Dependencies
+# =================================
+
+# Web framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+
+# Web3 / Ethereum
+web3==6.15.0
+
+# HTTP client (for TEE worker and IPFS)
+httpx==0.26.0
+
+# Data validation
+pydantic==2.5.0
+
+# Cryptography (for encryption helper endpoint)
+cryptography==42.0.0
+
+# Form data parsing
+python-multipart==0.0.6
