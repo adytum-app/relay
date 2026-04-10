@@ -272,4 +272,4 @@ Frontend                    Backend                     TEE Worker
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+BSL License - see [LICENSE](LICENSE) for details.
