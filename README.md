@@ -130,15 +130,15 @@ POST /api/nash/generate-bid-hash?amount=1000000&salt=0x...
 
 ## Environment Variables
 
-| Variable           | Required | Default                    | Description                            |
-| ------------------ | -------- | -------------------------- | -------------------------------------- |
-| `CONTRACT_ADDRESS` | Yes      | -                          | AdytumMarketplace contract address     |
-| `TEE_WORKER_URL`   | No       | `http://localhost:8001`    | TEE worker URL                         |
-| `RPC_URL`          | No       | `https://sepolia.base.org` | Base RPC endpoint                      |
-| `IPFS_GATEWAY`     | No       | `https://ipfs.io/ipfs/`    | IPFS gateway URL                       |
-| `HOST`             | No       | `0.0.0.0`                  | Server bind address                    |
-| `PORT`             | No       | `8000`                     | Server port                            |
-| `CORS_ORIGINS`     | No       | `*`                        | Allowed CORS origins (comma-separated) |
+| Variable           | Required | Default                                        | Description                            |
+| ------------------ | -------- | ---------------------------------------------- | -------------------------------------- |
+| `CONTRACT_ADDRESS` | Yes      | -                                              | AdytumMarketplace contract address     |
+| `TEE_WORKER_URL`   | No       | `http://localhost:8001`                        | TEE worker URL                         |
+| `RPC_URL`          | No       | `https://sepolia.base.org`                     | Base RPC endpoint                      |
+| `IPFS_GATEWAY`     | No       | `https://olive-useful-fly-746.mypinata.cloud/` | IPFS gateway URL                       |
+| `HOST`             | No       | `0.0.0.0`                                      | Server bind address                    |
+| `PORT`             | No       | `8000`                                         | Server port                            |
+| `CORS_ORIGINS`     | No       | `*`                                            | Allowed CORS origins (comma-separated) |
 
 ---
 
