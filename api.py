@@ -14,7 +14,6 @@ Matches AdytumMarketplace.sol contract interface.
 
 import os
 import re
-import hashlib
 from datetime import datetime
 from typing import Optional, Any
 from contextlib import asynccontextmanager
@@ -32,12 +31,16 @@ import httpx
 RPC_URL = os.getenv("RPC_URL", "https://sepolia.base.org")
 CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS")
 TEE_WORKER_URL = os.getenv("TEE_WORKER_URL", "http://localhost:8001")
-IPFS_GATEWAY = os.getenv("IPFS_GATEWAY", "https://ipfs.io/ipfs/")
+IPFS_GATEWAY = os.getenv(
+    "IPFS_GATEWAY",
+    "https://olive-useful-fly-746.mypinata.cloud/",
+)
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
 
 # =============================================================================
 # Contract Constants (must match AdytumMarketplace.sol)
 # =============================================================================
+
 
 class MonetizationModel:
     PAY_PER_USE = 0
@@ -77,6 +80,7 @@ executions_cache: dict[str, dict] = {}
 # Pydantic Validators
 # =============================================================================
 
+
 def validate_bytes32(v: str) -> str:
     """Validate and normalize bytes32 hex string."""
     clean = v.replace("0x", "")
@@ -100,16 +104,18 @@ def validate_address(v: str) -> str:
 
 class ExecuteRequestBody(BaseModel):
     """Request to execute invention code (Pay-Per-Use model)."""
-    execution_id: str = Field(..., description="Unique execution ID (bytes32 hex)")
+    execution_id: str = Field(
+        ..., description="Unique execution ID (bytes32 hex)"
+    )
     invention_id: str = Field(..., description="Invention ID (bytes32 hex)")
     buyer: str = Field(..., description="Buyer address")
     input_data: dict = Field(..., description="Input data for the invention")
-    
+
     @field_validator("execution_id", "invention_id")
     @classmethod
     def _validate_bytes32(cls, v: str) -> str:
         return validate_bytes32(v)
-    
+
     @field_validator("buyer")
     @classmethod
     def _validate_address(cls, v: str) -> str:
@@ -133,12 +139,12 @@ class ReleaseKeyRequestBody(BaseModel):
     """Request to release decryption key to Nash winner."""
     invention_id: str = Field(..., description="Invention ID (bytes32 hex)")
     buyer: str = Field(..., description="Buyer address (must be Nash winner)")
-    
+
     @field_validator("invention_id")
     @classmethod
     def _validate_bytes32(cls, v: str) -> str:
         return validate_bytes32(v)
-    
+
     @field_validator("buyer")
     @classmethod
     def _validate_address(cls, v: str) -> str:
@@ -161,24 +167,28 @@ class ReleaseKeyResponse(BaseModel):
 class StoreKeyRequestBody(BaseModel):
     """Request to store decryption key in TEE."""
     invention_id: str = Field(..., description="Invention ID (bytes32 hex)")
-    decryption_key: str = Field(..., description="Fernet decryption key (44 chars)")
+    decryption_key: str = Field(
+        ..., description="Fernet decryption key (44 chars)"
+    )
     seller: str = Field(..., description="Seller address")
-    
+
     @field_validator("invention_id")
     @classmethod
     def _validate_bytes32(cls, v: str) -> str:
         return validate_bytes32(v)
-    
+
     @field_validator("seller")
     @classmethod
     def _validate_address(cls, v: str) -> str:
         return validate_address(v)
-    
+
     @field_validator("decryption_key")
     @classmethod
     def _validate_fernet_key(cls, v: str) -> str:
         if len(v) != 44:
-            raise ValueError("Decryption key must be a valid Fernet key (44 chars)")
+            raise ValueError(
+                "Decryption key must be a valid Fernet key (44 chars)"
+            )
         return v
 
 
@@ -412,7 +422,7 @@ async def health():
     # Check TEE worker health
     tee_status = "unknown"
     tee_oracle = None
-    
+
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(f"{TEE_WORKER_URL}/health")
@@ -422,7 +432,7 @@ async def health():
                 tee_oracle = tee_data.get("oracle_address")
     except Exception:
         tee_status = "unreachable"
-    
+
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
@@ -440,13 +450,15 @@ async def health():
 # =============================================================================
 
 @app.post("/api/execute", response_model=ExecuteResponse)
-async def request_execution(body: ExecuteRequestBody, background_tasks: BackgroundTasks):
+async def request_execution(
+    body: ExecuteRequestBody, background_tasks: BackgroundTasks
+):
     """
     Request code execution (Pay-Per-Use model).
-    
+
     Frontend calls this after the on-chain requestExecution() tx confirms.
     This triggers the TEE to execute the invention in the nsjail sandbox.
-    
+
     Flow:
     1. Frontend calls contract.requestExecution() → emits ExecutionRequested
     2. Frontend calls this endpoint with execution_id
@@ -456,7 +468,7 @@ async def request_execution(body: ExecuteRequestBody, background_tasks: Backgrou
     6. Backend returns result to frontend
     """
     execution_id = body.execution_id
-    
+
     # Check if execution already exists
     if execution_id in executions_cache:
         cached = executions_cache[execution_id]
@@ -465,7 +477,7 @@ async def request_execution(body: ExecuteRequestBody, background_tasks: Backgrou
             status=cached["status"],
             **cached.get("result", {}),
         )
-    
+
     # Initialize in cache
     executions_cache[execution_id] = {
         "status": "pending",
@@ -474,10 +486,10 @@ async def request_execution(body: ExecuteRequestBody, background_tasks: Backgrou
         "input_data": body.input_data,
         "created_at": datetime.utcnow().isoformat(),
     }
-    
+
     # Execute in background
     background_tasks.add_task(execute_background, execution_id, body)
-    
+
     return ExecuteResponse(execution_id=execution_id, status="pending")
 
 
@@ -485,7 +497,7 @@ async def execute_background(execution_id: str, body: ExecuteRequestBody):
     """Background task to execute via TEE worker."""
     try:
         executions_cache[execution_id]["status"] = "executing"
-        
+
         # Call TEE worker
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
@@ -499,7 +511,7 @@ async def execute_background(execution_id: str, body: ExecuteRequestBody):
             )
             response.raise_for_status()
             result = response.json()
-        
+
         if result.get("success"):
             executions_cache[execution_id]["status"] = "completed"
             executions_cache[execution_id]["result"] = {
@@ -513,7 +525,7 @@ async def execute_background(execution_id: str, body: ExecuteRequestBody):
             executions_cache[execution_id]["result"] = {
                 "error": result.get("error", "Unknown error"),
             }
-            
+
     except httpx.HTTPStatusError as e:
         executions_cache[execution_id]["status"] = "failed"
         executions_cache[execution_id]["result"] = {
@@ -535,13 +547,13 @@ async def get_execution_status(execution_id: str):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid execution ID format"
         )
-    
+
     if execution_id not in executions_cache:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Execution not found"
         )
-    
+
     cached = executions_cache[execution_id]
     return ExecuteResponse(
         execution_id=execution_id,
@@ -558,7 +570,7 @@ async def get_execution_status(execution_id: str):
 async def store_key(body: StoreKeyRequestBody):
     """
     Store decryption key in TEE.
-    
+
     Called by seller when listing an invention:
     1. Seller encrypts code with Fernet key
     2. Seller uploads encrypted code to IPFS
@@ -577,13 +589,13 @@ async def store_key(body: StoreKeyRequestBody):
             )
             response.raise_for_status()
             result = response.json()
-        
+
         return StoreKeyResponse(
             success=result.get("success", False),
             invention_id=body.invention_id,
             error=result.get("error"),
         )
-        
+
     except httpx.HTTPStatusError as e:
         return StoreKeyResponse(
             success=False,
@@ -602,7 +614,7 @@ async def store_key(body: StoreKeyRequestBody):
 async def release_key(body: ReleaseKeyRequestBody):
     """
     Release decryption key to Nash winner.
-    
+
     Called by buyer after Nash negotiation settles:
     1. Buyer wins Nash negotiation (highest valid bid)
     2. Seller reveals and settles the Nash auction
@@ -621,7 +633,7 @@ async def release_key(body: ReleaseKeyRequestBody):
             )
             response.raise_for_status()
             result = response.json()
-        
+
         if result.get("success"):
             return ReleaseKeyResponse(
                 invention_id=body.invention_id,
@@ -638,7 +650,7 @@ async def release_key(body: ReleaseKeyRequestBody):
                 status="failed",
                 error=result.get("error"),
             )
-            
+
     except httpx.HTTPStatusError as e:
         return ReleaseKeyResponse(
             invention_id=body.invention_id,
@@ -665,10 +677,12 @@ async def check_key_exists(invention_id: str):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid invention ID format"
         )
-    
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(f"{TEE_WORKER_URL}/keys/{invention_id}")
+            response = await client.get(
+                f"{TEE_WORKER_URL}/keys/{invention_id}"
+            )
             response.raise_for_status()
             return response.json()
     except httpx.HTTPStatusError as e:
@@ -693,7 +707,7 @@ async def check_key_exists(invention_id: str):
 async def get_invention(invention_id: str):
     """
     Get invention details from contract.
-    
+
     NOTE: We always fetch fresh from the blockchain to ensure
     Nash phase and other state is current. Do not cache this data.
     """
@@ -704,13 +718,13 @@ async def get_invention(invention_id: str):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid invention ID format"
         )
-    
+
     # Always fetch fresh from contract (no caching - state changes on-chain)
     try:
         contract = get_contract()
         inv_bytes = bytes.fromhex(invention_id.replace("0x", ""))
         result = contract.functions.getInvention(inv_bytes).call()
-        
+
         invention = {
             "id": "0x" + result[0].hex(),
             "seller": result[1],
@@ -722,10 +736,12 @@ async def get_invention(invention_id: str):
             "createdAt": result[7],
             "isActive": result[8],
         }
-        
+
         # Fetch model-specific config
         if invention["model"] == MonetizationModel.PAY_PER_USE:
-            ppu_result = contract.functions.getPayPerUseConfig(inv_bytes).call()
+            ppu_result = contract.functions.getPayPerUseConfig(
+                inv_bytes
+            ).call()
             invention["payPerUseConfig"] = {
                 "pricePerCall": str(ppu_result[0]),
                 "maxCallsPerDay": ppu_result[1],
@@ -751,9 +767,9 @@ async def get_invention(invention_id: str):
                 "highestBid": str(nash_result[11]),
                 "sellerBond": str(nash_result[12]),
             }
-        
+
         return invention
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -772,12 +788,12 @@ async def get_buyer_usage(invention_id: str, buyer: str):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
-    
+
     try:
         contract = get_contract()
         inv_bytes = bytes.fromhex(invention_id.replace("0x", ""))
         result = contract.functions.getBuyerUsage(inv_bytes, buyer).call()
-        
+
         return {
             "inventionId": invention_id,
             "buyer": buyer,
@@ -787,7 +803,7 @@ async def get_buyer_usage(invention_id: str, buyer: str):
             "lastDayReset": result[3],
             "last30DayReset": result[4],
         }
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -806,12 +822,12 @@ async def get_nash_bid(invention_id: str, bidder: str):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
-    
+
     try:
         contract = get_contract()
         inv_bytes = bytes.fromhex(invention_id.replace("0x", ""))
         result = contract.functions.getNashBid(inv_bytes, bidder).call()
-        
+
         return {
             "inventionId": invention_id,
             "bidder": bidder,
@@ -824,7 +840,7 @@ async def get_nash_bid(invention_id: str, bidder: str):
             "depositForfeited": result[6],
             "trialCount": result[7],
         }
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -843,13 +859,13 @@ async def get_ipfs_content(cid: str):
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(f"{IPFS_GATEWAY}{cid}")
             response.raise_for_status()
-            
+
             # Try to parse as JSON
             try:
                 return response.json()
             except:
                 return {"content": response.text}
-                
+
     except httpx.HTTPStatusError as e:
         raise HTTPException(
             status_code=e.response.status_code,
@@ -870,29 +886,29 @@ async def get_ipfs_content(cid: str):
 async def encrypt_code(body: EncryptCodeRequest):
     """
     Encrypt invention code for upload.
-    
+
     Returns:
     - encrypted_code: Base64-encoded Fernet-encrypted code
     - decryption_key: Fernet key (store in TEE via /api/keys/store)
     - encrypted_code_hash: keccak256 hash (submit to contract)
     - encryption_key_hash: keccak256 hash (submit to contract)
-    
+
     In production, this should happen client-side for security.
     This endpoint is provided for convenience during development.
     """
     from cryptography.fernet import Fernet
-    
+
     # Generate encryption key
     key = Fernet.generate_key()
     fernet = Fernet(key)
-    
+
     # Encrypt the code
     encrypted = fernet.encrypt(body.code.encode())
-    
+
     # Compute hashes (using keccak256 to match contract)
     encrypted_code_hash = "0x" + Web3.keccak(encrypted).hex()
     encryption_key_hash = "0x" + Web3.keccak(key).hex()
-    
+
     return EncryptCodeResponse(
         encrypted_code=encrypted.decode(),  # Base64
         decryption_key=key.decode(),
@@ -909,7 +925,7 @@ async def encrypt_code(body: EncryptCodeRequest):
 async def generate_bid_hash(amount: int, salt: str):
     """
     Generate a Nash bid hash.
-    
+
     The hash is keccak256(abi.encodePacked(amount, salt)).
     This matches the contract's expected format.
     """
@@ -922,13 +938,13 @@ async def generate_bid_hash(amount: int, salt: str):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Salt must be a valid bytes32 hex string"
         )
-    
+
     # Pack amount (uint256) + salt (bytes32)
     packed = Web3.solidity_keccak(
         ["uint256", "bytes32"],
         [amount, salt_bytes]
     )
-    
+
     return {
         "bidHash": "0x" + packed.hex(),
         "amount": amount,
@@ -942,12 +958,12 @@ async def generate_bid_hash(amount: int, salt: str):
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
-    
+
     print(f"Starting Adytum Backend API on {host}:{port}")
-    
+
     uvicorn.run(
         app,
         host=host,

@@ -50,7 +50,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 ENV HOST=0.0.0.0 \
     PORT=8000 \
     RPC_URL=https://sepolia.base.org \
-    IPFS_GATEWAY=https://ipfs.io/ipfs/ \
+    IPFS_GATEWAY=https://olive-useful-fly-746.mypinata.cloud/ \
     CORS_ORIGINS=*
 
 # Run the server
